@@ -37,9 +37,32 @@ The optimizer stays in the Muon family. The change is not a replacement of Newto
 
 In practice this worked best as a conservative hybrid. Muon remained the base geometry, and the Krylov branch only fired on a subset of slices.
 
+## Architecture
+
+| Component | Setting | First introduced by |
+|-----------|---------|---------------------|
+| Layers | 11 (512d, 8 GQA heads, 4 KV heads) | Baseline |
+| MLP | 3× (1536) with LeakyReLU(0.5)² | [#493](https://github.com/openai/parameter-golf/pull/493) @parinzee |
+| Attention | XSA on all 11 layers | [#478](https://github.com/openai/parameter-golf/pull/478) @gowtham0992 |
+| BigramHash | 3072 × dim=112 | [#1019](https://github.com/openai/parameter-golf/pull/1019) lineage (concept: [#162](https://github.com/openai/parameter-golf/pull/162) @raahilshah) |
+| RoPE | Partial (16/64 dims) | [#315](https://github.com/openai/parameter-golf/pull/315) @jfprincz |
+| LN Scale | 1/√(layer+1) | [#315](https://github.com/openai/parameter-golf/pull/315) @jfprincz |
+| VE128 | Layers 9-10 | [#374](https://github.com/openai/parameter-golf/pull/374) @unnir |
+| SmearGate | Position-mixing gate | [#65](https://github.com/openai/parameter-golf/pull/65) @aquariouseworkman |
+| U-Net skips | Encoder-decoder connections | [#289](https://github.com/openai/parameter-golf/pull/289) |
+| Weight avg | EMA(0.997) + Tight SWA(every 50) | [#401](https://github.com/openai/parameter-golf/pull/401) @newjordan |
+| Quantization | Full Hessian GPTQ int6 (AR self-gen calibration) | [#1019](https://github.com/openai/parameter-golf/pull/1019) lineage (GPTQ: [#535](https://github.com/openai/parameter-golf/pull/535) @raahilshah) |
+| Compression | LZMA preset=9 | [#160](https://github.com/openai/parameter-golf/pull/160) @ChaseWNorton |
+| Warmdown | 4000 iterations | [#364](https://github.com/openai/parameter-golf/pull/364) @shikhar1729 |
+| Optimizer | Parallel Muon + Parameter Banking + **gated Krylov residual correction** | **This work**, built on [#399](https://github.com/openai/parameter-golf/pull/399) @abaybektursun |
+| Late QAT | STE at LR scale < 0.15 | [#286](https://github.com/openai/parameter-golf/pull/286) @chris-buckley |
+| Selective pruning | ±1 values by reconstruction error | [#609](https://github.com/openai/parameter-golf/pull/609) @saml212 |
+| Flash Attention 3 | Hopper warp-specialized kernels | [#122](https://github.com/openai/parameter-golf/pull/122) @mtybadger |
+
+
 ## What Actually Ran
 
-This result did **not** use HNet. It used:
+This result used:
 
 - the standard SentencePiece `sp1024` tokenizer path
 - 11 layers, 512 dim, 8 attention heads, 4 KV heads
@@ -51,16 +74,6 @@ This result did **not** use HNet. It used:
 - selective `±1` pruning to fit the official byte cap
 
 The exact script snapshot used for the run is [train_gpt.py]. It is the historical single-file training script copied from the A100 box, not the current evolving repo root script.
-
-## Why SentencePiece Beat HNet Here
-
-An HNet branch was tested later and performed much worse on this setup. The main issue was throughput and representation mismatch:
-
-- the HNet path decoded SentencePiece shards back into bytes
-- that changed the effective batch and context semantics
-- HNet saw less text per optimizer step while paying for extra encoder/chunker/decoder machinery
-
-For this English FineWeb regime and this budget, fixed SentencePiece was the better trade.
 
 ### Brief HNet Result
 
@@ -95,4 +108,4 @@ torchrun --standalone --nproc_per_node=1 train_gpt.py
 
 ## Bottom Line
 
-The useful result here is simple: keep the strong SentencePiece GPT stack, keep Muon as the main optimizer, and add only a small gated Krylov residual correction on top. That combination produced a strong under-cap non-record score of **1.09596320 BPB** on a single A100.
+The useful result here is simple: keep the strong 11L SP stack, keep Muon as the main optimizer, and add only a small gated Krylov residual correction on top. That combination produced a strong under-cap non-record score of **1.09596320 BPB** on a single A100 training for ~9 hours.
