@@ -2,7 +2,7 @@
 
 Muon with a small gated Krylov correction on square, nonnormal slices. Standard SentencePiece GPT path, AR self-generated Full-Hessian GPTQ, selective `±1` pruning, and sliding-window evaluation.
 
-**val_bpb: 1.09596320** (sliding, seed=`1337`) | **15,925,099 bytes** | **1xA100 80GB, 8h 52m**
+**val_bpb: 1.09596320** (sliding, seed=`1337`) | **15,957,504 bytes** | **1xA100 80GB, 8h 52m**
 
 > This is a non-record submission. It fits under the `16,000,000` byte artifact cap, but it does not satisfy the challenge's main leaderboard wallclock requirement of `10 minutes on 8xH100 SXM`.
 
@@ -15,15 +15,15 @@ Muon with a small gated Krylov correction on square, nonnormal slices. Standard 
 | Step-20000 val_bpb | `1.1166` |
 | Post-EMA val_bpb | `1.1156` |
 | Int6 roundtrip exact BPB | `1.11953265` |
-| Artifact bytes | `15,925,099` |
+| Artifact bytes | `15,957,504` |
 | Compressed model bytes | `15,817,800` |
-| Code bytes | `107,299` |
+| Code bytes | `139,704` |
 | Parameters | `26,993,756` |
 | Peak allocated VRAM | `29,336 MiB` |
 | Training time | `31,932,706 ms` (`8h 52m 12.706s`) |
 | Average step time | `1596.64 ms` |
 
-The exact training log for this run is [train_seed1337.log].
+The exact training log for this run is [train_seed1337.log]. The current `train_gpt.py` in this folder includes a small CPU-import compatibility guard so the record imports cleanly during Python 3.10 / CPU smoke tests; that changes the code-byte count but does not affect the SentencePiece execution path used for the logged run.
 
 ## Main Idea
 
@@ -81,7 +81,7 @@ The later learned-HNet branch was measured on the same A100 box and finished at:
 
 | Variant | Sliding BPB | Int6 roundtrip exact BPB | Artifact |
 |---------|-------------|--------------------------|----------|
-| SentencePiece + Muon + gated Krylov | `1.09596320` | `1.11953265` | `15,925,099` |
+| SentencePiece + Muon + gated Krylov | `1.09596320` | `1.11953265` | `15,957,504` |
 | HNet + Muon + gated Krylov | `1.42700113` | `1.51636243` | `15,554,948` |
 
 So HNet was comfortably under the byte cap, but much worse in quality. The main issue was not compression size; it was that the HNet path changed the representation and throughput in a way that hurt this setup.
